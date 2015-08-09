@@ -4,9 +4,8 @@
 // @description   Bessere Verwaltung der Meldungen - NUR FÜR MODERATOREN
 // @include       http://forum.sa-mp.de/*
 // @include       https://forum.sa-mp.de/*
-// @include       http://ticket.sa-mp.de/scp/*
 // @require       https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js
-// @version       4.2.1.1
+// @version       4.2.1.2
 // @grant         unsafeWindow
 // @grant         GM_getValue
 // @grant         GM_setValue
@@ -58,30 +57,6 @@ $(document).ready(function () {
 		$("#skipupdate").click(function() { disablePopup(); });
 	}
 	GM_setValue("lastvers",version);
-
-	if( $(location).attr('href').indexOf("http://ticket.sa-mp.de/scp/") != -1 && GM_getValue("go_tickethelper",1) == 1) //ticketsystem
-	{
-		var lasturl = "";
-		var ticketcheckfunc = function() {
-			if($(".ticket_info").length && !$(".insinfos").length && !$("#uinfo_load_div").length)
-			{
-				var name_a = $(".icon-user",".ticket_info").closest("a");
-				$(name_a).bind("contextmenu",function(e){
-					e.preventDefault();
-					
-					var inp = prompt("Bitte geben Sie den echten Benutzernamen ein:","");
-					if(!inp.length) return;
-					$(".insinfos").remove();
-					$("span",name_a).text(inp);
-					loadtickethelper();
-				});
-				loadtickethelper();
-			}
-		};
-		ticketcheckfunc();
-		setInterval(function() { ticketcheckfunc(); },500);
-		return;
-	}
 	
 	bfid = getbfid();
 	if( GM_getValue("hidemod","1")==1) $("#userMenuModeration").remove();
@@ -95,26 +70,23 @@ $(document).ready(function () {
 	
 	if( GM_getValue("checkticket",1) == 1)
 	{
-		$("#userMenu > ul").append('<li id="ticketsysmenu"><a href="http://ticket.sa-mp.de/scp/tickets.php" id="ticketsys_act" target="_new"><span>Tickets</span></a></li>');
+		$("#userMenu > ul").append('<li id="ticketsysmenu"><a href="http://ticket.sa-mp.de/tickets" id="ticketsys_act" target="_new"><span>Tickets</span></a></li>');
 		
 		GM_xmlhttpRequest({
 			method: "GET",
-			url: "http://ticket.sa-mp.de/scp/tickets.php", 
+			url: "http://ticket.sa-mp.de/api", 
 			onload: function(response) {
 				var data = response.responseText;
-				var myname = $(data).find("#info strong").text().trim();
 				
-				if( !$(data).find('form[name=tickets]').length )
+				if( data == "require_auth" )
 				{
 					$("span","#ticketsys_act").css({"opacity":"0.2"});
 				}
 				else
 				{
-					var count_open=0;
-					$(data).find("tbody > tr[id]","table.list").each(function() {
-						if( !$(".staffAssigned",this).length || ( $(".staffAssigned",this).text().trim()==myname && $(".ticketPreview b",this).length ) ) count_open++;
-					});
-					
+                    var jsondata = jQuery.parseJSON(data);
+                    var count_open = jsondata.length;
+                    
 					if(count_open>0)
 					{
 						$("span","#ticketsys_act").append(' ('+count_open+')');
@@ -220,7 +192,10 @@ $(document).ready(function () {
 		var autor = getinfo("reportby");
 		var turl = getinfo("thema_url");
 		
-		modfeedback("Meldung verworfen",getinfo("reportby"),turl);
+        if(GM_getValue("goalert_reporter",1)==1) 
+        {
+            if(confirm("Meldungsfeedback versenden?")) modfeedback("Meldung verworfen",getinfo("reportby"),turl);
+        }
 		removedisplay(pID);
 	});
 	$(".movetop").live("click",function() { 
@@ -607,8 +582,9 @@ function getstarter(turl, execute)
 function modfeedback(betreff, ziel, turl)
 {
 	if(GM_getValue("goalert_reporter",1)!=1 || typeof ziel == "undefined" || !ziel.length) return;
-	var sendtemplate = filltemplate(GM_getValue("alert_reporter_feedback",""), new Array(ziel,turl,betreff));
-	sendpn(ziel,"Deine Meldung wurde bearbeitet: "+betreff,sendtemplate);
+    
+    var sendtemplate = filltemplate(GM_getValue("alert_reporter_feedback",""), new Array(ziel,turl,betreff));
+    sendpn(ziel,"Deine Meldung wurde bearbeitet: "+betreff,sendtemplate);
 }
 
 function initposts()
@@ -1224,7 +1200,7 @@ function deftemplates(goreset)
 {
 	if(typeof goreset != "undefined" && goreset == 1)
 	{
-		var templates = ["delete_template","alert_moving_template","advanced_warn_template","unlock_deny_template","alert_reporter_feedback"];
+		var templates = ["delete_template","alert_moving_template","advanced_warn_template","unlock_deny_template","alert_reporter_feedback","alert_reporter_feedback_detail"];
 		for(var i=0;i<templates.length;i++) GM_setValue(templates[i],"");
 	}
 
@@ -1233,6 +1209,7 @@ function deftemplates(goreset)
 	deftemplate("advanced_warn_template",' \n\n[b]Mehr Informationen:[/b]\nGegen Dich wurde soeben wegen eines Regelverstoßes eine Verwarnung ausgesprochen.\nBei weiteren Verwarnungen musst Du mit ernsthaften Konsequenzen rechnen, die Deine Mitgliedschaft in diesem Forum betreffen.\n\n[b]Die Verwarnung betrifft diesen Beitrag:[/b]\n[url=%1%]siehe hier[/url]\n\n[b]Grund der Verwarnung:[/b]\n%2%\n\n[b]Kommentar der Moderation:[/b]\n%3%\n\n\n[b]Wann deine Verwarnung abläuft:[/b]\n[url='+prot+'://forum.sa-mp.de/index.php?page=UserWarningOverview&userID=%4%]siehe hier[/url]\n\n\nMit freundlichen Grüßen\ndas Team von SA-MP.de');
 	deftemplate("unlock_deny_template",'Dein freizuschaltender Beitrag wurde abgelehnt.\n\n[b]Grund:[/b]\n%1%\n\nSolltest du in Erwägung ziehen den Versuch zu wiederholen,\nbeachte bitte diese Details.\n\nDies ist der BB-Code deines Beitrages:\n[code]%2%[/code]');
 	deftemplate("alert_reporter_feedback",'Hallo %1%,\n\ndeine Meldung von [url=%2%]diesem Beitrag[/url] wurde gerade bearbeitet.\nFolgende Aktion wurde als Reaktion darauf durchgeführt: [b]%3%[/b]\n\nBitte beachte, dass es für Moderatoren viele Aspekte und Hinweise zu beachten gibt die für dich nicht einsehbar oder unmittelbar nachvollziehbar sind. Dadurch kann sich das Urteil der Moderation erheblich von deiner Einschätzung unterscheiden. Da viele Meldungen bearbeitet werden und nicht jedes mal eine detaillierte Begründung versendet werden kann, [b]reagiere bitte nur in besonderen Einzelfällen auf diese Nachricht[/b]!\n\nVielen Dank für deine Meldung und freundliche Grüße,\ndas Team von SA-MP.de'); 
+	deftemplate("alert_reporter_feedback_detail",'Hallo %1%,\n\ndeine Meldung von [url=%2%]diesem Beitrag[/url] wurde gerade bearbeitet.\nFolgende Aktion wurde als Reaktion darauf durchgeführt: [b]%3%[/b]\nDetails: %4%\n\nBitte beachte, dass es für Moderatoren viele Aspekte und Hinweise zu beachten gibt die für dich nicht einsehbar oder unmittelbar nachvollziehbar sind. Dadurch kann sich das Urteil der Moderation erheblich von deiner Einschätzung unterscheiden. Da viele Meldungen bearbeitet werden und nicht jedes mal eine detaillierte Begründung versendet werden kann, [b]reagiere bitte nur in besonderen Einzelfällen auf diese Nachricht[/b]!\n\nVielen Dank für deine Meldung und freundliche Grüße,\ndas Team von SA-MP.de'); 
 	deftemplate("alert_edit",'Hallo %1%,\n\neiner deiner Beiträge wurde gerade seitens der Moderation überarbeitet.\n\n[b]Grund:[/b] %2%\nDu kannst die Änderungen [url=%3%]hier[/url] sofort einsehen.\n\nBitte nimm dir die Korrektur zu Herzen und befolge unsere Richtlinien künftig.\nDas Zurücksetzen unserer Änderungen kann und wird sanktioniert werden.\n\n\nMit freundlichen Grüßen\ndas Team von SA-MP.de');
 	deftemplate("ip_trace_template",'http://whatismyipaddress.com/ip/%1%');
 }
